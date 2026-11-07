@@ -5,15 +5,13 @@ import sys
 from datetime import datetime
 
 import pandas as pd
-import requests
 from airflow.exceptions import AirflowSkipException
-from airflow.models import Variable
 from airflow.sdk import dag, task
 
 # The DAG bundle loader does not always add this file's own directory to
 # sys.path, so make the sibling "common" package importable explicitly.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import db_helpers, gx_helpers  # noqa: E402
+from common import alert_helpers, db_helpers, gx_helpers  # noqa: E402
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW_DATA_DIR = os.path.join(REPO_ROOT, "data", "raw_data")
@@ -60,26 +58,22 @@ def ingestion_dag():
         if criticality not in ("medium", "high"):
             return
 
-        webhook_url = Variable.get("teams_webhook_url", default_var=None)
-        if not webhook_url:
-            return
-
-        summary = ", ".join(f"{k}: {v}" for k, v in validation_result["error_counts"].items())
-        requests.post(
-            webhook_url,
-            json={
-                "@type": "MessageCard",
-                "@context": "http://schema.org/extensions",
-                "summary": f"Data quality alert: {criticality}",
-                "text": (
-                    f"File: {read_result['file_name']}\n"
-                    f"Criticality: {criticality}\n"
-                    f"Invalid rows: {validation_result['invalid_percentage']:.1f}%\n"
-                    f"Errors: {summary}\n"
-                    f"Data Docs: {validation_result['data_docs_path']}"
-                ),
+        errors = ", ".join(f"{k}: {v}" for k, v in validation_result["error_counts"].items())
+        if validation_result["missing_column"]:
+            errors = "missing column (schema error)"
+        alert_helpers.send_teams_alert(
+            alert_helpers.DQ_WEBHOOK_VARIABLE,
+            title=f"Data quality alert - criticality {criticality.upper()}",
+            facts={
+                "File": read_result["file_name"],
+                "Criticality": criticality,
+                "Invalid rows": f"{validation_result['invalid_rows']}/{validation_result['total_rows']} "
+                                f"({validation_result['invalid_percentage']:.1f}%)",
+                "Errors": errors or "-",
             },
-            timeout=10,
+            severity="critical" if criticality == "high" else "warning",
+            link_url=validation_result["data_docs_url"],
+            link_title="Open Data Docs report",
         )
 
     @task

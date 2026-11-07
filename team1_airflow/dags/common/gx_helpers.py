@@ -12,6 +12,11 @@ GX_CONTEXT_ROOT_DIR = os.environ.get(
 )
 CHECKPOINT_NAME = "stroke_checkpoint"
 
+# Data Docs are served by the nginx container. Alerts link to this *browser-reachable*
+# base URL (not the file:// path GX reports inside the Airflow container).
+DATA_DOCS_PUBLIC_URL = os.environ.get("DATA_DOCS_PUBLIC_URL", "http://localhost:8081").rstrip("/")
+_SITE_MARKER = "local_site/"
+
 _context = None
 
 
@@ -54,13 +59,32 @@ def get_data_docs_path(context=None) -> str:
     return sites[0]["site_url"] if sites else ""
 
 
+def to_public_url(site_url: str) -> str:
+    """Translate a GX ``file://.../local_site/<page>`` URL into the nginx-served URL."""
+    if _SITE_MARKER in site_url:
+        return f"{DATA_DOCS_PUBLIC_URL}/{site_url.split(_SITE_MARKER, 1)[1]}"
+    return f"{DATA_DOCS_PUBLIC_URL}/index.html"
+
+
+def get_validation_report_url(context, result_identifier) -> str:
+    """Public URL of the Data Docs page for one specific validation run."""
+    try:
+        sites = context.get_docs_sites_urls(resource_identifier=result_identifier)
+        if sites:
+            return to_public_url(sites[0]["site_url"])
+    except Exception:  # never let a link-building problem fail the ingestion
+        pass
+    return to_public_url(get_data_docs_path(context))
+
+
 def run_validation(df: pd.DataFrame) -> dict:
     total_rows = len(df)
     context = _get_context()
     checkpoint = context.checkpoints.get(CHECKPOINT_NAME)
     checkpoint_result = checkpoint.run(batch_parameters={"dataframe": df})
-    validation_result = next(iter(checkpoint_result.run_results.values()))
+    result_identifier, validation_result = next(iter(checkpoint_result.run_results.items()))
     data_docs_path = get_data_docs_path(context)
+    data_docs_url = get_validation_report_url(context, result_identifier)
 
     invalid_row_indices: set[int] = set()
     error_counts: dict[str, int] = {}
@@ -82,6 +106,7 @@ def run_validation(df: pd.DataFrame) -> dict:
                 "error_counts": {},
                 "invalid_row_indices": [],
                 "data_docs_path": data_docs_path,
+                "data_docs_url": data_docs_url,
             }
 
         result = expectation_result["result"]
@@ -108,4 +133,5 @@ def run_validation(df: pd.DataFrame) -> dict:
         "error_counts": error_counts,
         "invalid_row_indices": sorted(invalid_row_indices),
         "data_docs_path": data_docs_path,
+        "data_docs_url": data_docs_url,
     }
