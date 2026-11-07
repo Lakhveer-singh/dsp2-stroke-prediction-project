@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+.ipynb_checkpoints/
+data/raw_data/*.csv
+data/good_data/*.csv
+data/bad_data/*.csv
+data/archived_data/*.csv
+!data/raw_data/.gitkeep
+!data/good_data/.gitkeep
+!data/bad_data/.gitkeep
+!data/archived_data/.gitkeep
+

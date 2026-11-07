@@ -1,0 +1,152 @@
+{
+  "expectations": [
+    {
+      "id": "3a9dfdb8-841f-427d-9d5b-d82898a5375d",
+      "kwargs": {
+        "column_set": [
+          "gender",
+          "age",
+          "hypertension",
+          "heart_disease",
+          "ever_married",
+          "work_type",
+          "Residence_type",
+          "avg_glucose_level",
+          "bmi",
+          "smoking_status"
+        ]
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_table_columns_to_match_set"
+    },
+    {
+      "id": "3ce47ee4-d5c2-4b29-b656-f3d74456a4c1",
+      "kwargs": {
+        "column": "gender"
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_not_be_null"
+    },
+    {
+      "id": "cac6f31d-8d1a-4498-88dc-61cebd282e22",
+      "kwargs": {
+        "column": "gender",
+        "value_set": [
+          "Male",
+          "Female",
+          "Other"
+        ]
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_in_set"
+    },
+    {
+      "id": "db5ca220-3ffb-4eb0-804a-d41a9f592320",
+      "kwargs": {
+        "column": "age",
+        "max_value": 120.0,
+        "min_value": 0.0
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_between"
+    },
+    {
+      "id": "9e9c4c11-493a-413b-b547-2cc647541354",
+      "kwargs": {
+        "column": "work_type",
+        "value_set": [
+          "Private",
+          "Self-employed",
+          "Govt_job",
+          "children",
+          "Never_worked"
+        ]
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_in_set"
+    },
+    {
+      "id": "d94c48c6-25cc-4396-b929-9348cff41493",
+      "kwargs": {
+        "column": "avg_glucose_level",
+        "type_": "float64"
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_of_type"
+    },
+    {
+      "id": "b1e6f2a0-2f3a-4c1d-9c4e-7a5d8f0c9e11",
+      "kwargs": {
+        "column": "avg_glucose_level",
+        "max_value": 350.0,
+        "min_value": 30.0
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_between"
+    },
+    {
+      "id": "48d21c64-7be2-47dc-be31-23f2d24108aa",
+      "kwargs": {
+        "column": "bmi",
+        "min_value": 0.0
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_between"
+    },
+    {
+      "id": "f0e41508-c3ee-4832-b08a-a740afd33521",
+      "kwargs": {
+        "column": "ever_married",
+        "value_set": [
+          "Yes",
+          "No"
+        ]
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_in_set"
+    },
+    {
+      "id": "6794e732-678a-4101-b784-a0b27e4a288f",
+      "kwargs": {
+        "column": "Residence_type",
+        "value_set": [
+          "Urban",
+          "Rural"
+        ]
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_in_set"
+    },
+    {
+      "id": "a429120c-fe9c-4c82-b931-87779beafabc",
+      "kwargs": {
+        "column": "smoking_status",
+        "value_set": [
+          "formerly smoked",
+          "never smoked",
+          "smokes",
+          "Unknown"
+        ]
+      },
+      "meta": {},
+      "severity": "critical",
+      "type": "expect_column_values_to_be_in_set"
+    }
+  ],
+  "id": "df5ae8cc-20d9-4cac-8b4e-5563309fc427",
+  "meta": {
+    "great_expectations_version": "1.18.2"
+  },
+  "name": "stroke_suite",
+  "notes": null
+}

@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop]
+
+jobs:
+  detect-folders:
+    runs-on: ubuntu-latest
+    outputs:
+      has-service-web: ${{ steps.check.outputs.has-service-web }}
+      has-data-training: ${{ steps.check.outputs.has-data-training }}
+      has-airflow: ${{ steps.check.outputs.has-airflow }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          if [ -d "team5_service_web" ]; then
+            echo "has-service-web=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-service-web=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -d "team3_data_training" ]; then
+            echo "has-data-training=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-data-training=false" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -d "team1_airflow" ]; then
+            echo "has-airflow=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-airflow=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  lint:
+    needs: detect-folders
+    if: needs.detect-folders.outputs.has-service-web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: team5_service_web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install flake8
+        run: pip install -r requirements-dev.txt
+      - name: Run flake8
+        run: flake8 .
+
+  test:
+    needs: detect-folders
+    if: needs.detect-folders.outputs.has-service-web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: team5_service_web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-dev.txt
+          pip install -r model_service/requirements.txt
+      - name: Run model_service tests
+        working-directory: team5_service_web/model_service
+        run: PYTHONPATH=. pytest tests/ -q
+
+  test-data-pipeline:
+    needs: detect-folders
+    if: needs.detect-folders.outputs.has-data-training == 'true' && needs.detect-folders.outputs.has-airflow == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install -r team3_data_training/scripts/requirements.txt
+          pip install -r team3_data_training/model_training/requirements.txt
+          pip install -r team3_data_training/tests/requirements-test.txt
+      - name: Run data pipeline / GX tests
+        working-directory: team3_data_training
+        run: PYTHONPATH=../team1_airflow pytest tests/ -q

@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store
+
+great_expectations/gx/uncommitted/
+great_expectations/gx/expectations/.ge_store_backend_id
+great_expectations/gx/plugins/

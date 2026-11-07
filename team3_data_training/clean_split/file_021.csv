@@ -1,0 +1,11 @@
+gender,age,hypertension,heart_disease,ever_married,work_type,Residence_type,avg_glucose_level,bmi,smoking_status
+Female,82.0,1,1,No,Private,Rural,84.03,26.5,formerly smoked
+Female,53.0,0,0,Yes,Self-employed,Rural,96.88,31.4,Unknown
+Female,51.0,1,0,Yes,Self-employed,Rural,176.34,28.4,never smoked
+Female,8.0,0,0,No,children,Urban,72.81,18.2,Unknown
+Male,51.0,0,0,No,Self-employed,Rural,219.17,29.8,never smoked
+Female,38.0,0,0,No,Private,Rural,97.49,26.9,never smoked
+Female,52.0,0,0,Yes,Private,Urban,77.59,17.7,formerly smoked
+Male,19.0,0,0,No,Private,Rural,84.31,31.8,never smoked
+Female,74.0,0,0,No,Self-employed,Urban,89.52,39.2,Unknown
+Female,39.0,0,0,Yes,Private,Rural,83.51,26.4,never smoked

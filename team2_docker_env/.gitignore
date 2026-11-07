@@ -1,0 +1,14 @@
+.env
+AIRFLOW__API_AUTH__JWT_SECRET
+AIRFLOW__CORE__FERNET_KEY
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+great_expectations/gx/uncommitted/
+great_expectations/gx/expectations/.ge_store_backend_id
+great_expectations/gx/plugins/
+
+.DS_Store
