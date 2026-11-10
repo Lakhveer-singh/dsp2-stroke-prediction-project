@@ -1,0 +1,23 @@
+# Two Microsoft Teams channels. URLs come from the .env file via the grafana service environment.
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: teams-data-quality
+    receivers:
+      - uid: teams-data-quality
+        type: teams
+        disableResolveMessage: false
+        settings:
+          url: ${TEAMS_DQ_WEBHOOK_URL}
+          title: '{{ template "default.title" . }}'
+          message: '{{ template "default.message" . }}'
+  - orgId: 1
+    name: teams-ml
+    receivers:
+      - uid: teams-ml
+        type: teams
+        disableResolveMessage: false
+        settings:
+          url: ${TEAMS_ML_WEBHOOK_URL}
+          title: '{{ template "default.title" . }}'
+          message: '{{ template "default.message" . }}'
