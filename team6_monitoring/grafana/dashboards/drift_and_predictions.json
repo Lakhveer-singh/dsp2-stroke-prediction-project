@@ -1,0 +1,840 @@
+{
+  "uid": "dsp-drift-predictions",
+  "title": "DSP | Data drift & prediction monitoring",
+  "description": "ML engineers: serving data vs the champion model's training baseline, and model behaviour over time (last hour, auto-refresh).",
+  "tags": [
+    "dsp",
+    "ml",
+    "drift"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m"
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "num_feature",
+        "label": "Numerical feature",
+        "type": "custom",
+        "query": "age,avg_glucose_level,bmi",
+        "current": {
+          "selected": true,
+          "text": "age",
+          "value": "age"
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "age",
+            "value": "age"
+          },
+          {
+            "selected": false,
+            "text": "avg_glucose_level",
+            "value": "avg_glucose_level"
+          },
+          {
+            "selected": false,
+            "text": "bmi",
+            "value": "bmi"
+          }
+        ],
+        "multi": false,
+        "includeAll": false,
+        "hide": 0
+      }
+    ]
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Numerical feature drift: serving mean vs training baseline (pick the feature above)",
+      "description": "Mean of the selected numerical feature in the predictions table (5 min buckets) against the mean of the CHAMPION model's training data (dashed).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dsp-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "showPoints": "auto",
+            "spanNulls": true,
+            "barAlignment": 0,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "training baseline"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "gray"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "serving mean (5 min)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dsp-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_bin('5 minutes', p.prediction_time, TIMESTAMPTZ '2000-01-01') AS \"time\",\n       AVG(p.${num_feature}) AS \"serving mean (5 min)\",\n       (SELECT mean FROM training_stats WHERE is_baseline AND feature_name = '${num_feature}') AS \"training baseline\"\nFROM predictions p\nWHERE $__timeFilter(p.prediction_time)\nGROUP BY 1\nORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Numerical drift score (z-score of the 5 min mean vs training baseline)",
+      "description": "|serving mean - training mean| / (training std / sqrt(n)). Green < 2, orange 2-3, red >= 3: a value >= 3 means the mean moved far more than sampling noise explains.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dsp-postgres"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "scheme",
+            "showPoints": "auto",
+            "spanNulls": true,
+            "barAlignment": 0,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 2
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dsp-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH b AS (\n  SELECT feature_name, mean, std FROM training_stats WHERE is_baseline AND feature_type = 'numerical'\n), s AS (\n  SELECT date_bin('5 minutes', prediction_time, TIMESTAMPTZ '2000-01-01') AS time, COUNT(*)::float AS n,\n         AVG(age) AS age, AVG(avg_glucose_level) AS avg_glucose_level, AVG(bmi) AS bmi\n  FROM predictions\n  WHERE $__timeFilter(prediction_time)\n  GROUP BY 1\n)\nSELECT s.time AS \"time\",\n       ABS(s.age - (SELECT mean FROM b WHERE feature_name = 'age'))\n         / NULLIF((SELECT std FROM b WHERE feature_name = 'age') / SQRT(s.n), 0) AS \"age\" ,\n       ABS(s.avg_glucose_level - (SELECT mean FROM b WHERE feature_name = 'avg_glucose_level'))\n         / NULLIF((SELECT std FROM b WHERE feature_name = 'avg_glucose_level') / SQRT(s.n), 0) AS \"avg_glucose_level\" ,\n       ABS(s.bmi - (SELECT mean FROM b WHERE feature_name = 'bmi'))\n         / NULLIF((SELECT std FROM b WHERE feature_name = 'bmi') / SQRT(s.n), 0) AS \"bmi\" \nFROM s\nORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Categorical drift: distance to the training category shares (smoking_status, work_type, gender)",
+      "description": "Total variation distance = 0.5 * sum |serving share - training share| per 5 min bucket (0 = identical, 1 = completely different). Green < 0.2, orange 0.2-0.35, red >= 0.35.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dsp-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "scheme",
+            "showPoints": "auto",
+            "spanNulls": true,
+            "barAlignment": 0,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.2
+              },
+              {
+                "color": "red",
+                "value": 0.35
+              }
+            ]
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dsp-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH unpiv AS (\n  SELECT date_bin('5 minutes', prediction_time, TIMESTAMPTZ '2000-01-01') AS time, 'smoking_status' AS feature, smoking_status::text AS category\n  FROM predictions WHERE $__timeFilter(prediction_time)\n  UNION ALL\n  SELECT date_bin('5 minutes', prediction_time, TIMESTAMPTZ '2000-01-01') AS time, 'work_type' AS feature, work_type::text AS category\n  FROM predictions WHERE $__timeFilter(prediction_time)\n  UNION ALL\n  SELECT date_bin('5 minutes', prediction_time, TIMESTAMPTZ '2000-01-01') AS time, 'gender' AS feature, gender::text AS category\n  FROM predictions WHERE $__timeFilter(prediction_time)\n), serv AS (\n  SELECT time, feature, category, COUNT(*)::float AS n FROM unpiv GROUP BY 1, 2, 3\n), tot AS (\n  SELECT time, feature, SUM(n) AS total FROM serv GROUP BY 1, 2\n), base AS (\n  SELECT feature_name AS feature, category, proportion FROM training_stats\n  WHERE is_baseline AND feature_type = 'categorical' AND feature_name IN ('smoking_status', 'work_type', 'gender')\n), cats AS (\n  SELECT feature, category FROM base UNION SELECT feature, category FROM serv\n), grid AS (\n  SELECT t.time, t.feature, t.total, c.category FROM tot t JOIN cats c ON c.feature = t.feature\n)\nSELECT g.time AS \"time\", g.feature AS metric,\n       0.5 * SUM(ABS(COALESCE(s.n, 0) / g.total - COALESCE(b.proportion, 0))) AS \"value\"\nFROM grid g\nLEFT JOIN serv s ON s.time = g.time AND s.feature = g.feature AND s.category = g.category\nLEFT JOIN base b ON b.feature = g.feature AND b.category = g.category\nGROUP BY 1, 2\nORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Share of serving values outside the training range (age, glucose, bmi)",
+      "description": "Percentage of predictions whose feature value is below the training minimum or above the training maximum. Green < 5 %, orange 5-20 %, red >= 20 %.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dsp-postgres"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "scheme",
+            "showPoints": "auto",
+            "spanNulls": true,
+            "barAlignment": 0,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          },
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dsp-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH b AS (\n  SELECT feature_name, min_value, max_value FROM training_stats WHERE is_baseline AND feature_type = 'numerical'\n)\nSELECT date_bin('5 minutes', p.prediction_time, TIMESTAMPTZ '2000-01-01') AS \"time\",\n       100.0 * AVG(((p.age < (SELECT min_value FROM b WHERE feature_name = 'age'))\n                  OR (p.age > (SELECT max_value FROM b WHERE feature_name = 'age')))::int) AS \"age\" ,\n       100.0 * AVG(((p.avg_glucose_level < (SELECT min_value FROM b WHERE feature_name = 'avg_glucose_level'))\n                  OR (p.avg_glucose_level > (SELECT max_value FROM b WHERE feature_name = 'avg_glucose_level')))::int) AS \"avg_glucose_level\" ,\n       100.0 * AVG(((p.bmi < (SELECT min_value FROM b WHERE feature_name = 'bmi'))\n                  OR (p.bmi > (SELECT max_value FROM b WHERE feature_name = 'bmi')))::int) AS \"bmi\" \nFROM predictions p\nWHERE $__timeFilter(p.prediction_time)\nGROUP BY 1\nORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Positive-prediction rate: serving vs training baseline",
+      "description": "Share of predictions = 1 (stroke) per 5 min against the share the champion model predicted on its own training data (dashed). A large gap = model behaviour has shifted.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dsp-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "showPoints": "auto",
+            "spanNulls": true,
+            "barAlignment": 0,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "training baseline"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "gray"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "serving positive rate (5 min)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dsp-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_bin('5 minutes', prediction_time, TIMESTAMPTZ '2000-01-01') AS \"time\",\n       AVG(prediction)::float AS \"serving positive rate (5 min)\",\n       (SELECT proportion FROM training_stats WHERE is_baseline AND feature_name = 'prediction') AS \"training baseline\"\nFROM predictions\nWHERE $__timeFilter(prediction_time)\nGROUP BY 1\nORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Predicted probability distribution over time",
+      "description": "Share of predictions per probability band (stacked to 100 %). Watch for one band swallowing all the others (model collapsing to one outcome).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dsp-postgres"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 2,
+            "fillOpacity": 70,
+            "gradientMode": "none",
+            "showPoints": "auto",
+            "spanNulls": true,
+            "barAlignment": 0,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "max": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p < 0.2"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "0.2 <= p < 0.5"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p >= 0.5"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dsp-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_bin('5 minutes', prediction_time, TIMESTAMPTZ '2000-01-01') AS \"time\",\n       (COUNT(*) FILTER (WHERE prediction_proba < 0.2))::float / COUNT(*) AS \"p < 0.2\",\n       (COUNT(*) FILTER (WHERE prediction_proba >= 0.2\n                         AND prediction_proba < 0.5))::float / COUNT(*) AS \"0.2 <= p < 0.5\",\n       (COUNT(*) FILTER (WHERE prediction_proba >= 0.5))::float / COUNT(*) AS \"p >= 0.5\"\nFROM predictions\nWHERE $__timeFilter(prediction_time)\nGROUP BY 1\nORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Constant-prediction detector: spread of predicted probabilities",
+      "description": "Standard deviation of the predicted probability per 5 min. Red (< 0.02) = the model outputs almost the same value for everyone, orange < 0.05, green otherwise.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dsp-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "scheme",
+            "showPoints": "auto",
+            "spanNulls": true,
+            "barAlignment": 0,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.02
+              },
+              {
+                "color": "green",
+                "value": 0.05
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dsp-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_bin('5 minutes', prediction_time, TIMESTAMPTZ '2000-01-01') AS \"time\", STDDEV_SAMP(prediction_proba) AS \"std of predicted probability\"\nFROM predictions\nWHERE $__timeFilter(prediction_time)\nGROUP BY 1\nHAVING COUNT(*) >= 5\nORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Positive-prediction rate per model version (before / after retraining)",
+      "description": "One line per model_version stored with each prediction: shows how behaviour changed when a newly trained champion was promoted.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dsp-postgres"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 5,
+            "gradientMode": "none",
+            "showPoints": "auto",
+            "spanNulls": true,
+            "barAlignment": 0,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dsp-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_bin('5 minutes', prediction_time, TIMESTAMPTZ '2000-01-01') AS \"time\", model_version AS metric, AVG(prediction)::float AS \"value\"\nFROM predictions\nWHERE $__timeFilter(prediction_time)\nGROUP BY 1, 2\nORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}
