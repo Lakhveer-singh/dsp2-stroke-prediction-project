@@ -1,22 +1,48 @@
+# DSP stroke prediction - full stack (Defense 1 + Defense 2)
+#
+#   db ──┬── mlflow ── mlflow-bootstrap ── model_service ── webapp
+#        ├── airflow-init ── airflow-{apiserver,scheduler,dag-processor}
+#        ├── grafana (reads PostgreSQL directly)
+#        └── nginx (serves Great Expectations Data Docs written by Airflow)
+
 x-airflow-common: &airflow-common
-  image: apache/airflow:3.1.0-python3.12
+  image: dsp-airflow:2.0
+  build: ../team1_airflow
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
     AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW__CORE__FERNET_KEY}
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    # Fixed Airflow UI login (admin / admin) instead of a random password at every container start
+    AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE: /opt/airflow/auth/passwords.json
+    # DAGs start running right after `docker compose up` (no manual un-pausing in the UI)
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
     AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
     AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
     AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW__API_AUTH__JWT_SECRET}
     AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW__WEBSERVER__SECRET_KEY}
-    _PIP_ADDITIONAL_REQUIREMENTS: "great_expectations==1.18.2 apache-airflow-providers-postgres==6.3.0 requests==2.32.5 pandas==2.1.4 numpy==1.26.4"
     AIRFLOW_CONN_DSP_APP_DB: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-    AIRFLOW_VAR_TEAMS_WEBHOOK_URL: ${TEAMS_WEBHOOK_URL}
+    # Teams channels -> Airflow Variables (teams_dq_webhook_url / teams_ml_webhook_url)
+    AIRFLOW_VAR_TEAMS_DQ_WEBHOOK_URL: ${TEAMS_DQ_WEBHOOK_URL:-}
+    AIRFLOW_VAR_TEAMS_ML_WEBHOOK_URL: ${TEAMS_ML_WEBHOOK_URL:-}
     MODEL_SERVICE_URL: http://model_service:8000
+    # --- Defense 2
+    MLFLOW_TRACKING_URI: http://mlflow:5000
+    MLFLOW_PUBLIC_URL: http://localhost:${MLFLOW_PORT:-5000}
+    MODEL_NAME: ${MODEL_NAME:-stroke_model}
+    DATA_DOCS_PUBLIC_URL: http://localhost:${NGINX_PORT:-8081}
+    REFERENCE_DATASET_PATH: /opt/airflow/reference/healthcare-dataset-stroke-data.xls
+    TRAINING_SCHEDULE: ${TRAINING_SCHEDULE:-*/10 * * * *}
+    TRAINING_MIN_NEW_FILES: ${TRAINING_MIN_NEW_FILES:-5}
+    TRAINING_PRIMARY_METRIC: ${TRAINING_PRIMARY_METRIC:-f1}
+    TRAINING_INFERENCE_THRESHOLD_MS: ${TRAINING_INFERENCE_THRESHOLD_MS:-200}
   volumes:
     - ../team1_airflow/dags:/opt/airflow/dags
+    - ./airflow_auth:/opt/airflow/auth
     - ../team4_great_expectation/great_expectations:/opt/airflow/great_expectations
     - ../team3_data_training/data:/opt/airflow/data
+    # labelled reference dataset: source of the fixed test set + the (delayed) labels, read-only
+    - ../team3_data_training/healthcare-dataset-stroke-data.xls:/opt/airflow/reference/healthcare-dataset-stroke-data.xls:ro
   depends_on:
     db:
       condition: service_healthy
@@ -39,10 +65,59 @@ services:
       retries: 5
     restart: unless-stopped
 
+  # ---------------------------------------------------------------- MLflow (tracking + registry)
+  mlflow:
+    build: ./mlflow
+    image: dsp-mlflow:2.0
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/mlflow
+      # clients upload artifacts through the server (HTTP proxy) -> no shared filesystem needed
+      - --artifacts-destination=/mlflow/artifacts
+      - --serve-artifacts
+      # MLflow rejects unknown Host headers by default (DNS-rebinding protection): allow the
+      # docker service name used by Airflow / the API, plus localhost for the browser.
+      - --allowed-hosts=mlflow:5000,mlflow,localhost:${MLFLOW_PORT:-5000},localhost,127.0.0.1:${MLFLOW_PORT:-5000},127.0.0.1
+    ports:
+      - "${MLFLOW_PORT:-5000}:5000"
+    volumes:
+      - ./mlflow-artifacts:/mlflow/artifacts
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # One-shot: guarantees models:/stroke_model@champion exists (v1 = baseline model) + the
+  # initial drift baseline in training_stats, so the API serves from the registry from boot 1.
+  mlflow-bootstrap:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - python /opt/airflow/dags/common/bootstrap_registry.py
+    depends_on:
+      db:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+    restart: "no"
+
   model_service:
     build: ../team5_service_web/model_service
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_NAME: ${MODEL_NAME:-stroke_model}
+      MODEL_ALIAS: champion
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -51,6 +126,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      mlflow:
+        condition: service_healthy
+      mlflow-bootstrap:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   webapp:
@@ -69,12 +148,14 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # ---------------------------------------------------------------- Airflow
   airflow-init:
     <<: *airflow-common
     entrypoint: /bin/bash
     command:
       - -c
       - |
+        mkdir -p /opt/airflow/great_expectations/gx/uncommitted/data_docs/local_site || true
         airflow db migrate
     restart: "no"
 
@@ -112,5 +193,52 @@ services:
       db:
         condition: service_healthy
 
+  # ---------------------------------------------------------------- nginx: Great Expectations Data Docs
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "${NGINX_PORT:-8081}:80"
+    volumes:
+      - ../team4_great_expectation/great_expectations/gx/uncommitted/data_docs/local_site:/usr/share/nginx/html:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- Grafana (dashboards + alerts as code)
+  grafana:
+    image: grafana/grafana:12.2.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_DEFAULT_THEME: light
+      GF_DASHBOARDS_MIN_REFRESH_INTERVAL: 5s
+      # provisioning files reference these ($VAR expansion)
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # Grafana alert contact points (placeholders keep provisioning valid when unset)
+      TEAMS_DQ_WEBHOOK_URL: ${TEAMS_DQ_WEBHOOK_URL:-https://example.invalid/set-TEAMS_DQ_WEBHOOK_URL}
+      TEAMS_ML_WEBHOOK_URL: ${TEAMS_ML_WEBHOOK_URL:-https://example.invalid/set-TEAMS_ML_WEBHOOK_URL}
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ../team6_monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../team6_monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   pg_data:
+  grafana_data:

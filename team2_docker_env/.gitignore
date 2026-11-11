@@ -12,3 +12,5 @@ great_expectations/gx/expectations/.ge_store_backend_id
 great_expectations/gx/plugins/
 
 .DS_Store
+
+mlflow-artifacts/
