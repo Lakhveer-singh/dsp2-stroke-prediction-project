@@ -7,6 +7,15 @@ import streamlit as st
 from utils.api_client import post_predict
 
 st.set_page_config(page_title="Prediction", page_icon="🩺")
+
+
+def to_dataframe(response: dict) -> pd.DataFrame:
+    """Prediction rows + the version of the model that produced them (changes after retraining)."""
+    df = pd.DataFrame(response["results"])
+    df["model_version"] = response["model_version"]
+    return df
+
+
 st.title("Prediction")
 
 if "prediction_result" not in st.session_state:
@@ -51,7 +60,7 @@ if submitted:
     }
     try:
         response = post_predict([feature], source="webapp")
-        st.session_state["prediction_result"] = pd.DataFrame(response["results"])
+        st.session_state["prediction_result"] = to_dataframe(response)
     except requests.exceptions.RequestException as exc:
         st.error(f"Model service unavailable: {exc}")
 
@@ -80,7 +89,7 @@ if uploaded_file is not None:
         if st.button("Predict batch"):
             try:
                 response = post_predict(records, source="webapp")
-                st.session_state["prediction_result"] = pd.DataFrame(response["results"])
+                st.session_state["prediction_result"] = to_dataframe(response)
             except requests.exceptions.RequestException as exc:
                 st.error(f"Model service unavailable: {exc}")
 

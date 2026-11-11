@@ -14,8 +14,9 @@ def predict(payload: PredictRequest, request: Request, db: Session = Depends(get
     if not payload.features:
         raise HTTPException(status_code=400, detail="features must not be empty")
 
-    model = request.app.state.model
-    model_version = request.app.state.model_version
+    # model and version are read together under a lock so a concurrent /reload-model
+    # can never produce a prediction labelled with the wrong version.
+    model, model_version = request.app.state.model_holder.get()
 
     try:
         predictions, probabilities = predict_batch(model, payload.features)

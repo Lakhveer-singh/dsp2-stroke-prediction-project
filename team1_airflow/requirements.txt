@@ -1,0 +1,14 @@
+# Extra Python dependencies of the custom Airflow image (see Dockerfile).
+#
+# numpy / pandas / scikit-learn / joblib are pinned to the versions of Airflow's own
+# constraints file for 3.1.0 / Python 3.12 (so nothing in the official image is upgraded),
+# and the model_service image pins the SAME versions -- a model trained by the training DAG
+# therefore unpickles identically inside the API.
+great_expectations==1.18.2
+apache-airflow-providers-postgres==6.3.0
+requests==2.32.5
+pandas==2.1.4
+numpy==1.26.4
+scikit-learn==1.7.2
+joblib==1.5.2
+mlflow-skinny==3.17.2

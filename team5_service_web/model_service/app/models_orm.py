@@ -46,3 +46,28 @@ class IngestionErrorType(Base):
     ingestion_stat_id = Column(Integer, ForeignKey("ingestion_stats.id"), nullable=False, index=True)
     error_type = Column(String(50), nullable=False)
     error_count = Column(Integer, nullable=False)
+
+
+class TrainingStat(Base):
+    """Feature distribution of a model's training data (written by the training DAG).
+
+    One row per numerical feature, per (categorical feature, category) pair and one row for
+    the model's own prediction distribution. ``is_baseline`` marks the rows of the currently
+    promoted (champion) model -- those are the reference for the Grafana drift dashboard.
+    """
+
+    __tablename__ = "training_stats"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    model_version = Column(String(50), nullable=False, index=True)
+    is_baseline = Column(Boolean, nullable=False, default=False, index=True)
+    feature_name = Column(String(50), nullable=False)
+    feature_type = Column(String(20), nullable=False)  # numerical | categorical | prediction
+    category = Column(String(50), nullable=True)  # only for categorical / prediction rows
+    mean = Column(Float, nullable=True)
+    std = Column(Float, nullable=True)
+    min_value = Column(Float, nullable=True)
+    max_value = Column(Float, nullable=True)
+    proportion = Column(Float, nullable=True)
+    n_rows = Column(Integer, nullable=True)

@@ -56,3 +56,14 @@ class PastPredictionsResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: Literal["healthy"]
+
+
+class ReloadModelResponse(BaseModel):
+    status: Literal["reloaded"]
+    previous_model_version: Optional[str]
+    model_version: str
+
+
+class ModelInfoResponse(BaseModel):
+    model_version: Optional[str]
+    origin: Literal["mlflow", "file", "none"]
