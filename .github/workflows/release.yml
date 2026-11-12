@@ -1,0 +1,46 @@
+name: CD - GitHub Release
+
+# Continuous delivery (course requirement): when develop is merged into main, publish a GitHub
+# Release with a semantic-version tag and auto-generated notes. (Local docker-compose project:
+# a release is the "delivered artifact"; see README > CI/CD.)
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # tags + full history are needed to compute the next version
+
+      - name: Compute next semantic version
+        id: version
+        run: bash .github/scripts/next_version.sh >> "$GITHUB_OUTPUT"
+
+      - name: Build release notes (commits since previous release)
+        if: steps.version.outputs.tag != ''
+        run: |
+          {
+            echo "## What changed"
+            if [ -n "${{ steps.version.outputs.previous_tag }}" ]; then
+              git log "${{ steps.version.outputs.previous_tag }}..HEAD" --pretty='- %s (%h)'
+            else
+              git log --pretty='- %s (%h)'
+            fi
+          } > release_notes.md
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --target "$GITHUB_SHA" \
+            --title "${{ steps.version.outputs.tag }}" \
+            --notes-file release_notes.md \
+            --generate-notes

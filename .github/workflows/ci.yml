@@ -1,60 +1,25 @@
 name: CI
 
+# Runs on every pull request to develop. Linting and testing are SEPARATE jobs (course requirement).
 on:
   pull_request:
     branches: [develop]
 
 jobs:
-  detect-folders:
-    runs-on: ubuntu-latest
-    outputs:
-      has-service-web: ${{ steps.check.outputs.has-service-web }}
-      has-data-training: ${{ steps.check.outputs.has-data-training }}
-      has-airflow: ${{ steps.check.outputs.has-airflow }}
-    steps:
-      - uses: actions/checkout@v4
-      - id: check
-        run: |
-          if [ -d "team5_service_web" ]; then
-            echo "has-service-web=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has-service-web=false" >> "$GITHUB_OUTPUT"
-          fi
-          if [ -d "team3_data_training" ]; then
-            echo "has-data-training=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has-data-training=false" >> "$GITHUB_OUTPUT"
-          fi
-          if [ -d "team1_airflow" ]; then
-            echo "has-airflow=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has-airflow=false" >> "$GITHUB_OUTPUT"
-          fi
-
   lint:
-    needs: detect-folders
-    if: needs.detect-folders.outputs.has-service-web == 'true'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: team5_service_web
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install flake8
-        run: pip install -r requirements-dev.txt
-      - name: Run flake8
+        run: pip install -r team5_service_web/requirements-dev.txt
+      - name: Run flake8 (whole repository, config in .flake8)
         run: flake8 .
 
-  test:
-    needs: detect-folders
-    if: needs.detect-folders.outputs.has-service-web == 'true'
+  test-model-service:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: team5_service_web
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -62,15 +27,13 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: |
-          pip install -r requirements-dev.txt
-          pip install -r model_service/requirements.txt
-      - name: Run model_service tests
+          pip install -r team5_service_web/requirements-dev.txt
+          pip install -r team5_service_web/model_service/requirements.txt
+      - name: Run model_service tests (pydantic schemas, predict, past-predictions, reload-model)
         working-directory: team5_service_web/model_service
         run: PYTHONPATH=. pytest tests/ -q
 
   test-data-pipeline:
-    needs: detect-folders
-    if: needs.detect-folders.outputs.has-data-training == 'true' && needs.detect-folders.outputs.has-airflow == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -82,6 +45,51 @@ jobs:
           pip install -r team3_data_training/scripts/requirements.txt
           pip install -r team3_data_training/model_training/requirements.txt
           pip install -r team3_data_training/tests/requirements-test.txt
-      - name: Run data pipeline / GX tests
+      - name: Run data pipeline, Great Expectations, training-logic and alert tests
         working-directory: team3_data_training
         run: PYTHONPATH=../team1_airflow pytest tests/ -q
+
+  test-monitoring:
+    # Runs every Grafana panel / alert query against a real PostgreSQL (seeded healthy + broken scenarios)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dsp_user
+          POSTGRES_PASSWORD: change_me
+          POSTGRES_DB: dsp_monitor_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dsp_user"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install pytest pandas pyyaml psycopg2-binary==2.9.12 sqlalchemy==2.0.51
+      - name: Dashboards / alert rules are in sync with their generator
+        run: |
+          python team6_monitoring/tools/build_monitoring.py
+          git diff --exit-code -- team6_monitoring/grafana
+      - name: Run monitoring SQL + training-stats tests
+        env:
+          MONITORING_TEST_DB_URL: postgresql://dsp_user:change_me@localhost:5432/dsp_monitor_test
+        run: pytest team6_monitoring/tests -q
+
+  validate-infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker compose file is valid (with .env.example values)
+        working-directory: team2_docker_env
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+      - name: Semantic-version script behaves as documented
+        run: bash .github/scripts/test_next_version.sh
