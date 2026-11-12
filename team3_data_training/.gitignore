@@ -12,3 +12,6 @@ data/archived_data/*.csv
 !data/bad_data/.gitkeep
 !data/archived_data/.gitkeep
 
+
+# live-defense demo files are kept outside the repo (generate with scripts/generate_demo_data.py)
+demo_files/
