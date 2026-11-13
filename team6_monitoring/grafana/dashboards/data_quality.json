@@ -1,0 +1,657 @@
+{
+  "uid": "dsp-data-quality",
+  "title": "DSP | Ingested data quality",
+  "description": "Data operations: quality of the files ingested by the ingestion DAG (last hour, auto-refresh).",
+  "tags": [
+    "dsp",
+    "data-quality"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": [
+      "5s",
+      "10s",
+      "30s",
+      "1m"
+    ]
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Invalid data % per ingested file (completeness, validity, consistency, type, schema)",
+      "description": "One point per ingestion run. A file with a missing column counts as 100 %. Colours follow the criticality levels: green < 10 %, orange 10-50 %, red >= 50 %.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dsp-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "scheme",
+            "showPoints": "auto",
+            "spanNulls": true,
+            "barAlignment": 0,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          },
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dsp-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT run_timestamp AS \"time\",\n       CASE WHEN missing_column THEN 100.0 ELSE invalid_percentage END AS \"invalid % per ingested file\"\nFROM ingestion_stats\nWHERE $__timeFilter(run_timestamp)\nORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Errors by validation category over time (5 min buckets)",
+      "description": "Rows affected per category: completeness = null required fields, validity = out-of-range / impossible / outlier values, consistency = unknown categories, type = wrong data type. 'schema (files)' counts files with a missing column (one per file).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dsp-postgres"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 2,
+            "fillOpacity": 70,
+            "gradientMode": "none",
+            "showPoints": "auto",
+            "spanNulls": true,
+            "barAlignment": 0,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "completeness"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "validity"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "consistency"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "type"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "schema (files)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "other"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "gray"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dsp-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH errs AS (\n  SELECT s.run_timestamp AS ts,\n         CASE e.error_type\n            WHEN 'null_required_field' THEN 'completeness'\n            WHEN 'value_out_of_range' THEN 'validity'\n            WHEN 'impossible_value' THEN 'validity'\n            WHEN 'statistical_outlier' THEN 'validity'\n            WHEN 'invalid_categorical_value' THEN 'consistency'\n            WHEN 'wrong_type_value' THEN 'type'\n            ELSE 'other' END AS category,\n         e.error_count::float AS cnt\n  FROM ingestion_stats s\n  JOIN ingestion_error_types e ON e.ingestion_stat_id = s.id\n  WHERE $__timeFilter(s.run_timestamp)\n  UNION ALL\n  SELECT run_timestamp, 'schema (files)', 1.0\n  FROM ingestion_stats\n  WHERE missing_column AND $__timeFilter(run_timestamp)\n)\nSELECT date_bin('5 minutes', ts, TIMESTAMPTZ '2000-01-01') AS \"time\", category AS metric, SUM(cnt) AS \"value\"\nFROM errs\nGROUP BY 1, 2\nORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Ingestion criticality over time (files per 5 min)",
+      "description": "How many ingested files fell in each criticality level (spec: low <= 10 %, medium <= 50 %, high > 50 % invalid rows or missing column).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dsp-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 2,
+            "fillOpacity": 70,
+            "gradientMode": "none",
+            "showPoints": "auto",
+            "spanNulls": true,
+            "barAlignment": 0,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "none"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "low"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "yellow"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "medium"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "high"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dsp-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_bin('5 minutes', run_timestamp, TIMESTAMPTZ '2000-01-01') AS \"time\", criticality AS metric, COUNT(*)::float AS \"value\"\nFROM ingestion_stats\nWHERE $__timeFilter(run_timestamp)\nGROUP BY 1, 2\nORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Share of rejected rows (5 min buckets)",
+      "description": "Invalid rows / all ingested rows per 5 minutes (missing-column files count entirely). Rising values = the data source is getting worse.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dsp-postgres"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "scheme",
+            "showPoints": "auto",
+            "spanNulls": true,
+            "barAlignment": 0,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          },
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          },
+          "min": 0,
+          "max": 100
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dsp-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_bin('5 minutes', run_timestamp, TIMESTAMPTZ '2000-01-01') AS \"time\",\n       100.0 * SUM(CASE WHEN missing_column THEN total_rows ELSE invalid_rows END) / NULLIF(SUM(total_rows), 0) AS \"rejected rows %\"\nFROM ingestion_stats\nWHERE $__timeFilter(run_timestamp)\nGROUP BY 1\nORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "bargauge",
+      "title": "Most frequent error types in the selected window (rows affected)",
+      "description": "Which error types dominate recent ingestions (dashboard time range, default 1 h).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dsp-postgres"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "reduceOptions": {
+          "values": true,
+          "calcs": [],
+          "fields": ""
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dsp-postgres"
+          },
+          "editorMode": "code",
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT CASE e.error_type\n            WHEN 'null_required_field' THEN 'completeness'\n            WHEN 'value_out_of_range' THEN 'validity'\n            WHEN 'impossible_value' THEN 'validity'\n            WHEN 'statistical_outlier' THEN 'validity'\n            WHEN 'invalid_categorical_value' THEN 'consistency'\n            WHEN 'wrong_type_value' THEN 'type'\n            ELSE 'other' END || ' / ' || e.error_type AS \"error type\",\n       SUM(e.error_count) AS \"rows affected\"\nFROM ingestion_stats s\nJOIN ingestion_error_types e ON e.ingestion_stat_id = s.id\nWHERE $__timeFilter(s.run_timestamp)\nGROUP BY e.error_type\nORDER BY 2 DESC\nLIMIT 8",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Schema errors: files with a missing column (5 min buckets)",
+      "description": "Schema errors are file-level problems (a required column is absent). Any value > 0 deserves attention; 2+ in 10 minutes raises an alert.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "dsp-postgres"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "drawStyle": "bars",
+            "lineWidth": 2,
+            "fillOpacity": 70,
+            "gradientMode": "scheme",
+            "showPoints": "auto",
+            "spanNulls": true,
+            "barAlignment": 0,
+            "axisPlacement": "auto",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "dsp-postgres"
+          },
+          "editorMode": "code",
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_bin('5 minutes', run_timestamp, TIMESTAMPTZ '2000-01-01') AS \"time\",\n       COUNT(*) FILTER (WHERE missing_column)::float AS \"files with a missing column\"\nFROM ingestion_stats\nWHERE $__timeFilter(run_timestamp)\nGROUP BY 1\nORDER BY 1",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}
